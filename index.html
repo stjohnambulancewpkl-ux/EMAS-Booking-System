@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-100 selection:bg-emerald-200">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#00563F">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SJAM KPW - Mobile Patient Transfer & Dispatch Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf.js for Client-side PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Chart.js for Advanced Data Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sjam: { green: '#00563F', greenLight: '#007A59', greenDark: '#003B2A', red: '#D9232A', redDark: '#A61217', gold: '#D4AF37', grey: '#F4F6F8' }
+                    },
+                    fontFamily: { sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .pb-safe { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+        .chart-container { position: relative; width: 100%; height: 230px; }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans flex flex-col bg-slate-100 antialiased overflow-hidden">
+
+    <!-- LOGIN OVERLAY -->
+    <div id="login-overlay" class="absolute inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4">
+        <div class="bg-white max-w-md w-full rounded-2xl shadow-xl border border-slate-200 overflow-hidden transform transition-all">
+            <div class="bg-sjam-green p-6 text-center border-b-4 border-sjam-gold">
+                <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+                    <i class="fa-solid fa-truck-medical text-3xl text-sjam-green"></i>
+                </div>
+                <h2 class="text-xl font-extrabold text-white tracking-tight">SJAM KPW DISPATCH</h2>
+                <p class="text-emerald-200 text-xs mt-1">Pre-Hospital Care Database Access</p>
+            </div>
+            <form id="loginForm" onsubmit="handleLogin(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-user absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="loginUser" required class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sjam-green outline-none" placeholder="Enter username">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-lock absolute left-3 top-3 text-slate-400"></i>
+                        <input type="password" id="loginPass" required class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sjam-green outline-none" placeholder="Enter password">
+                    </div>
+                </div>
+                <div id="loginErrorMsg" class="hidden text-xs text-sjam-red font-bold text-center bg-red-50 p-2 rounded border border-red-100">
+                    Invalid credentials. Please try again.
+                </div>
+                <button type="submit" id="loginBtn" class="w-full py-3 bg-sjam-green hover:bg-sjam-greenDark text-white font-bold rounded-lg shadow-md transition active:scale-95 flex justify-center items-center disabled:opacity-75 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-right-to-bracket mr-2"></i> Secure Login
+                </button>
+                <p class="text-center text-[10px] text-slate-400 mt-4 font-mono">Authentication verified via Cloud Database</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP WRAPPER -->
+    <div id="app-wrapper" class="hidden h-full flex-col w-full pb-safe overflow-y-auto">
+        
+        <header class="bg-sjam-green text-white border-b-4 border-sjam-gold shadow-md sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-3 py-2.5 flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <div class="bg-white p-1 rounded-full shadow-inner flex items-center justify-center border border-sjam-gold w-9 h-9 shrink-0">
+                        <i class="fa-solid fa-cross text-xl text-sjam-green font-bold"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-extrabold text-sm sm:text-base tracking-tight leading-tight text-white flex items-center">
+                            SJAM KPW DISPATCH
+                        </h1>
+                        <p id="connectionStatus" class="text-[10px] text-emerald-200 font-medium tracking-wide flex items-center">
+                            <span class="inline-block w-1.5 h-1.5 rounded-full bg-sjam-red mr-1 animate-pulse"></span>
+                            Connecting to Cloud Database...
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <div id="liveClock" class="font-mono text-[11px] bg-sjam-greenDark/80 px-2.5 py-1 rounded-md border border-emerald-600/50 text-emerald-300 font-semibold">--:--</div>
+                    <button onclick="logout()" class="p-1.5 bg-sjam-red/90 hover:bg-sjam-red text-white rounded-md border border-red-500/50 transition shadow-sm active:scale-95" title="Logout">
+                        <i class="fa-solid fa-power-off text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="hidden md:block bg-white border-b border-slate-200 shadow-sm sticky top-[57px] z-40">
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex space-x-8 py-2">
+                    <button onclick="switchTab('dashboard')" id="tab-desktop-dashboard" class="tab-btn-desktop active inline-flex items-center px-4 py-2 text-sm font-semibold text-sjam-green border-b-2 border-sjam-green">
+                        <i class="fa-solid fa-chart-pie mr-2"></i> Operational Dashboard
+                    </button>
+                    <button onclick="switchTab('booking')" id="tab-desktop-booking" class="tab-btn-desktop inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-sjam-green">
+                        <i class="fa-solid fa-ambulance mr-2"></i> New Booking Entry
+                    </button>
+                    <button onclick="switchTab('records')" id="tab-desktop-records" class="tab-btn-desktop inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-sjam-green">
+                        <i class="fa-solid fa-list-check mr-2"></i> Transfer Queue <span id="desktopBadge" class="ml-2 px-2 py-0.5 text-xs bg-sjam-green text-white rounded-full">0</span>
+                    </button>
+                    <button onclick="switchTab('summary')" id="tab-desktop-summary" class="tab-btn-desktop inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-sjam-green">
+                        <i class="fa-solid fa-file-medical mr-2"></i> Patient Summary
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <div id="toastContainer" class="fixed top-14 left-1/2 -translate-x-1/2 z-50 flex flex-col space-y-2 w-11/12 max-w-sm pointer-events-none"></div>
+
+        <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4">
+
+            <!-- DASHBOARD -->
+            <section id="view-dashboard" class="tab-content block space-y-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-base font-bold text-sjam-green flex items-center">
+                            <i class="fa-solid fa-chart-line mr-2 text-sjam-gold"></i> Dispatch Intelligence & Analytics
+                        </h2>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="forceSyncWithCloud()" class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg flex items-center space-x-1 transition active:scale-95">
+                            <i class="fa-solid fa-cloud-arrow-down"></i>
+                            <span>Sync Data</span>
+                        </button>
+                        <select id="dashTimeFilter" onchange="applyDashboardFilters()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50 font-semibold outline-none focus:ring-1 focus:ring-sjam-green">
+                            <option value="ALL">All Time</option>
+                            <option value="TODAY">Today</option>
+                            <option value="THIS_WEEK">This Week</option>
+                            <option value="THIS_MONTH">This Month</option>
+                        </select>
+                        <select id="dashCrewFilter" onchange="applyDashboardFilters()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50 font-semibold outline-none focus:ring-1 focus:ring-sjam-green">
+                            <option value="ALL">All Crew</option>
+                            <option value="Allan">Allan</option>
+                            <option value="Serid">Serid</option>
+                            <option value="Saimun">Saimun</option>
+                            <option value="Selvam">Selvam</option>
+                            <option value="Venga">Venga</option>
+                        </select>
+                        <button onclick="exportDatabaseCSV()" class="px-3 py-1.5 text-xs bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 flex items-center space-x-1 shadow-sm transition active:scale-95">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span class="hidden sm:inline">CSV</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Cases</span><div class="w-7 h-7 rounded-full bg-emerald-50 text-sjam-green flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-ambulance"></i></div></div><span id="dashTotalCount" class="text-2xl font-extrabold text-slate-800 mt-1 block">0</span><span class="text-[10px] text-emerald-600 font-medium">Recorded in DB</span></div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In-Transit</span><div class="w-7 h-7 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-truck-medical"></i></div></div><span id="dashInTransitCount" class="text-2xl font-extrabold text-amber-600 mt-1 block">0</span><span class="text-[10px] text-amber-600 font-medium">Active Dispatches</span></div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Completed</span><div class="w-7 h-7 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-circle-check"></i></div></div><span id="dashCompletedCount" class="text-2xl font-extrabold text-emerald-600 mt-1 block">0</span><span id="dashCompletionRate" class="text-[10px] text-emerald-600 font-medium">0% Rate</span></div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Critical/Urgent</span><div class="w-7 h-7 rounded-full bg-red-50 text-sjam-red flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-triangle-exclamation"></i></div></div><span id="dashCriticalCount" class="text-2xl font-extrabold text-sjam-red mt-1 block">0</span><span id="dashCriticalPct" class="text-[10px] text-sjam-red font-medium">0% of Total</span></div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">O2 Support</span><div class="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-mask-ventilator"></i></div></div><span id="dashO2Count" class="text-2xl font-extrabold text-blue-600 mt-1 block">0</span><span class="text-[10px] text-blue-600 font-medium">Cases</span></div>
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"><div class="flex items-center justify-between"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avg Age</span><div class="w-7 h-7 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-user-clock"></i></div></div><span id="dashAvgAge" class="text-2xl font-extrabold text-purple-700 mt-1 block">0</span><span class="text-[10px] text-purple-600 font-medium">Years Old</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2"><div class="flex justify-between items-center pb-2 border-b border-slate-100"><h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider">Priority Mix</h3></div><div class="chart-container"><canvas id="chartPriorityDoughnut"></canvas></div></div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2"><div class="flex justify-between items-center pb-2 border-b border-slate-100"><h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider">Peak Hours</h3></div><div class="chart-container"><canvas id="chartDispatchHours"></canvas></div></div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2"><div class="flex justify-between items-center pb-2 border-b border-slate-100"><h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider">Top Conditions</h3></div><div class="chart-container"><canvas id="chartCategoryBar"></canvas></div></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2"><div class="flex justify-between items-center pb-2 border-b border-slate-100"><h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider">Hospital Traffic</h3></div><div class="chart-container"><canvas id="chartHospitalTraffic"></canvas></div></div>
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2"><div class="flex justify-between items-center pb-2 border-b border-slate-100"><h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider">Crew Workload</h3></div><div class="chart-container"><canvas id="chartCrewWorkload"></canvas></div></div>
+                </div>
+            </section>
+
+            <!-- NEW BOOKING -->
+            <section id="view-booking" class="tab-content hidden space-y-4">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-sjam-green px-4 py-3 text-white flex justify-between items-center">
+                        <div>
+                            <h2 class="text-sm sm:text-base font-bold flex items-center">
+                                <i class="fa-solid fa-pen-to-square mr-2 text-sjam-gold"></i> Patient Transfer Registration Form
+                            </h2>
+                        </div>
+                        <button type="button" onclick="loadSampleFormData()" class="px-2.5 py-1 text-xs bg-sjam-greenLight hover:bg-emerald-600 text-white font-semibold rounded-lg shadow-sm transition active:scale-95 flex items-center">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Quick Fill
+                        </button>
+                    </div>
+
+                    <form id="transferForm" onsubmit="handleFormSubmit(event)" class="p-4 space-y-6">
+                        
+                        <!-- 1. Patient Details -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider pb-1 border-b border-slate-200">1. Patient Details & Priority</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                                <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-700 mb-1">Full Name *</label><input type="text" id="patientName" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">NRIC/Passport *</label><input type="text" id="patientID" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Age *</label><input type="number" id="patientAge" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Gender *</label><select id="patientGender" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Race</label><select id="patientRace" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"><option value="">Select</option><option value="Malay">Malay</option><option value="Chinese">Chinese</option><option value="Indian">Indian</option><option value="Others">Others</option></select></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Nationality</label><select id="patientNationality" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"><option value="Malaysian">Malaysian</option><option value="Non-Malaysian">Non-Malaysian</option></select></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Priority *</label><select id="transferPriority" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold outline-none focus:ring-2 focus:ring-sjam-green"><option value="Non-Emergency">Non-Emergency</option><option value="Urgent">Urgent</option><option value="Emergency">Emergency</option><option value="Event Standby">Event Standby</option></select></div>
+                                
+                                <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-700 mb-1">Home Address (Patient)</label><input type="text" id="patientAddress" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green" placeholder="Patient's residential address"></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Name (NOK)</label><input type="text" id="nokName" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green" placeholder="Next of Kin Name"></div>
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Contact No. *</label><input type="tel" id="patientContact" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Location & Routing -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider pb-1 border-b border-slate-200">2. Routing & Location</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1"><i class="fa-solid fa-circle-dot text-sjam-red"></i> Pick Up Location *</label>
+                                    <textarea id="pickupAddress" required rows="2" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sjam-green outline-none" placeholder="Hospital/Clinic/House origin"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1"><i class="fa-solid fa-hospital text-sjam-green"></i> Drop off Location *</label>
+                                    <textarea id="destinationAddress" required rows="2" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sjam-green outline-none" placeholder="Receiving facility"></textarea>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">Transfer Distance Category *</label>
+                                    <select id="transferDistance" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green">
+                                        <option value="">-- Select Estimated Distance --</option>
+                                        <option value="<5">Less than 5 KM</option>
+                                        <option value="5-10">Between 5 to 10 KM</option>
+                                        <option value=">10">Greater than 10 KM</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Clinical Data & Case Type -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider pb-1 border-b border-slate-200">3. Vitals & Clinical Impression</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200 text-center"><span class="block text-[10px] font-bold text-slate-500 uppercase">BP</span><input type="text" id="vitalBP" placeholder="120/80" class="w-full py-1 text-center font-bold text-sm bg-white border rounded"></div>
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200 text-center"><span class="block text-[10px] font-bold text-slate-500 uppercase">Pulse</span><input type="number" id="vitalPulse" placeholder="75" class="w-full py-1 text-center font-bold text-sm bg-white border rounded"></div>
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200 text-center"><span class="block text-[10px] font-bold text-slate-500 uppercase">SpO2</span><input type="number" id="vitalSpO2" placeholder="98" class="w-full py-1 text-center font-bold text-sm bg-white border rounded"></div>
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200 text-center"><span class="block text-[10px] font-bold text-slate-500 uppercase">Resp Rate</span><input type="number" id="vitalResp" placeholder="16" class="w-full py-1 text-center font-bold text-sm bg-white border rounded"></div>
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200 text-center"><span class="block text-[10px] font-bold text-slate-500 uppercase">GCS</span><input type="text" id="vitalGCS" placeholder="15" class="w-full py-1 text-center font-bold text-sm bg-white border rounded"></div>
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200 text-center"><span class="block text-[10px] font-bold text-slate-500 uppercase">Temp</span><input type="number" step="0.1" id="vitalTemp" placeholder="36.8" class="w-full py-1 text-center font-bold text-sm bg-white border rounded"></div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Type Of Case *</label><select id="caseType" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"><option value="">Select Case Type</option><option value="Medical">Medical</option><option value="Trauma">Trauma</option><option value="MVA">MVA (Accident)</option><option value="Inter-Facility Transfer">Inter-Facility Transfer</option><option value="Event Standby">Event Standby</option><option value="Discharge">Discharge</option><option value="Others">Others</option></select></div>
+                                <div class="md:col-span-2"><label class="block text-xs font-bold text-slate-700 mb-1">Chief Complaint / Primary Diagnosis *</label><input type="text" id="primaryDiagnosis" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-4 pt-2">
+                                <label class="flex items-center space-x-2 text-xs font-bold text-sjam-red bg-red-50 px-3 py-2 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100"><input type="checkbox" id="chkRT" class="rounded text-sjam-red w-4 h-4"><span>Refusal of Treatment (RT)</span></label>
+                                <label class="flex items-center space-x-2 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-100"><input type="checkbox" id="chkDAMA" class="rounded text-amber-600 w-4 h-4"><span>D.A.M.A (Discharge Against Med Advice)</span></label>
+                            </div>
+                        </div>
+
+                        <!-- 4. Dispatch Timestamps -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider pb-1 border-b border-slate-200">4. Dispatch Timestamps</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div><label class="block text-[11px] font-bold text-slate-700 mb-1">Call Received *</label><input type="datetime-local" id="transferDateTime" required class="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                <div><label class="block text-[11px] font-bold text-slate-700 mb-1">Time En Route</label><input type="time" id="timeEnRoute" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                <div><label class="block text-[11px] font-bold text-slate-700 mb-1">Arrive Scene</label><input type="time" id="timeArriveScene" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                <div><label class="block text-[11px] font-bold text-slate-700 mb-1">Arrive Hospital</label><input type="time" id="timeArriveHospital" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                                <div><label class="block text-[11px] font-bold text-slate-700 mb-1">Arrive Hotspot (Base)</label><input type="time" id="timeArriveHotspot" class="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-sjam-green"></div>
+                            </div>
+                        </div>
+
+                        <!-- 5. Equipment & Crew -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold text-sjam-green uppercase tracking-wider pb-1 border-b border-slate-200">5. Equipment & Staff Response</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <label class="flex items-center space-x-2 text-xs font-medium text-slate-700 bg-slate-50 p-2 rounded-lg border"><input type="checkbox" name="equipment" value="Oxygen Therapy" class="rounded text-sjam-green w-4 h-4"><span>O2 Therapy</span></label>
+                                <label class="flex items-center space-x-2 text-xs font-medium text-slate-700 bg-slate-50 p-2 rounded-lg border"><input type="checkbox" name="equipment" value="Cardiac Monitor/AED" class="rounded text-sjam-green w-4 h-4"><span>AED / Monitor</span></label>
+                                <label class="flex items-center space-x-2 text-xs font-medium text-slate-700 bg-slate-50 p-2 rounded-lg border"><input type="checkbox" name="equipment" value="Suction Machine" class="rounded text-sjam-green w-4 h-4"><span>Suction Unit</span></label>
+                                <label class="flex items-center space-x-2 text-xs font-medium text-slate-700 bg-slate-50 p-2 rounded-lg border"><input type="checkbox" name="equipment" value="Wheelchair" class="rounded text-sjam-green w-4 h-4"><span>Wheelchair</span></label>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div><label class="block text-xs font-bold text-slate-700 mb-1">Call Sign</label><input type="text" id="ambulanceCallSign" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"></div>
+                                <div><label class="block text-xs font-bold text-sjam-green mb-1">Staff Response (Crew Lead) *</label>
+                                    <select id="crewLead" required class="w-full px-3 py-2 bg-emerald-50 border border-sjam-green rounded-lg text-sm font-bold outline-none">
+                                        <option value="">-- Select Crew --</option><option value="Allan">Allan</option><option value="Serid">Serid</option><option value="Saimun">Saimun</option><option value="Selvam">Selvam</option><option value="Venga">Venga</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="pt-3 border-t border-slate-200 flex space-x-2 justify-end">
+                            <button type="submit" id="submitBtn" class="px-6 py-3 text-xs font-extrabold text-white bg-sjam-green hover:bg-sjam-greenDark rounded-lg shadow-md active:scale-95 transition flex items-center justify-center">
+                                <i class="fa-solid fa-cloud-arrow-up mr-2"></i> Save to Cloud Database
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- DATABASE QUEUE -->
+            <section id="view-records" class="tab-content hidden space-y-3">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between gap-2">
+                        <div>
+                            <h2 class="text-sm sm:text-base font-bold text-sjam-green flex items-center"><i class="fa-solid fa-database mr-2"></i> Database Queue</h2>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="tableSearch" onkeyup="filterTable()" placeholder="Search..." class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg outline-none">
+                            <select id="statusFilter" onchange="filterTable()" class="text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50 font-semibold outline-none">
+                                <option value="ALL">All</option><option value="Pending">Pending</option><option value="In-Transit">In-Transit</option><option value="Completed">Completed</option><option value="Cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Mobile View -->
+                    <div id="mobileCardsContainer" class="block md:hidden p-3 space-y-3"></div>
+
+                    <!-- Desktop View -->
+                    <div class="hidden md:block overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-3">Date/Time</th>
+                                    <th class="p-3">Ref ID</th>
+                                    <th class="p-3">Patient</th>
+                                    <th class="p-3">Priority</th>
+                                    <th class="p-3">Diagnosis</th>
+                                    <th class="p-3">Crew</th>
+                                    <th class="p-3">Locations</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookingTableBody" class="divide-y divide-slate-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SUMMARY (SBAR) -->
+            <section id="view-summary" class="tab-content hidden space-y-4">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                    <div class="flex flex-col sm:flex-row justify-between gap-3 mb-4 pb-3 border-b border-slate-200">
+                        <h2 class="text-sm sm:text-base font-bold text-sjam-green"><i class="fa-solid fa-file-medical mr-2"></i> SBAR Handover</h2>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button onclick="shareWhatsApp()" class="px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg flex items-center justify-center hover:bg-emerald-700"><i class="fa-brands fa-whatsapp mr-1.5"></i> WhatsApp</button>
+                            <button onclick="downloadPDFReport()" class="px-3 py-2 text-xs font-bold bg-sjam-red text-white rounded-lg flex items-center justify-center hover:bg-red-800"><i class="fa-solid fa-file-pdf mr-1.5"></i> PDF</button>
+                        </div>
+                    </div>
+
+                    <!-- Printable Box -->
+                    <div id="pdfExportContainer" class="bg-white p-4 sm:p-6 border border-slate-300 rounded-lg shadow-inner max-w-3xl mx-auto space-y-4">
+                        <div class="border-b-2 border-sjam-green pb-3 flex justify-between">
+                            <div>
+                                <h2 class="text-sm font-extrabold text-sjam-green uppercase">St John Ambulance of Malaysia</h2>
+                                <p class="text-[10px] font-bold text-slate-700">WILAYAH PERSEKUTUAN DISPATCH & AMBULANCE SERVICE</p>
+                            </div>
+                            <div class="text-right text-[11px]"><p class="font-bold text-sjam-red" id="summaryRef">REF: -</p><p class="text-slate-500" id="summaryDate">Date: -</p></div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h4 class="text-[11px] font-extrabold text-sjam-green uppercase bg-emerald-50 px-2 py-1 rounded border-l-4 border-sjam-green">[S] Situation</h4>
+                            <div class="grid grid-cols-2 gap-1.5 text-xs p-1">
+                                <p><strong>Name:</strong> <span id="sBarName">-</span></p><p><strong>IC:</strong> <span id="sBarIC">-</span></p>
+                                <p><strong>Age/Gender:</strong> <span id="sBarAgeGender">-</span></p><p><strong>Priority:</strong> <span id="sBarPriority">-</span></p>
+                            </div>
+                            <div class="text-xs p-2 bg-slate-50 rounded border space-y-1">
+                                <p><strong>Pickup:</strong> <span id="sBarPickup">-</span></p><p><strong>Dest:</strong> <span id="sBarDest">-</span></p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h4 class="text-[11px] font-extrabold text-sjam-green uppercase bg-emerald-50 px-2 py-1 rounded border-l-4 border-sjam-green">[B] Background</h4>
+                            <div class="text-xs p-1 space-y-1"><p><strong>Type/Diagnosis:</strong> <span id="sBarDiag">-</span></p><p><strong>Flags:</strong> <span id="sBarFlags">-</span></p></div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h4 class="text-[11px] font-extrabold text-sjam-green uppercase bg-emerald-50 px-2 py-1 rounded border-l-4 border-sjam-green">[A] Assessment</h4>
+                            <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-xs text-center p-2 bg-slate-50 rounded border">
+                                <div><span class="block text-[9px] font-bold">BP</span><span id="sBarBP">-</span></div>
+                                <div><span class="block text-[9px] font-bold">PULSE</span><span id="sBarPR">-</span></div>
+                                <div><span class="block text-[9px] font-bold">SpO2</span><span id="sBarSpO2">-</span></div>
+                                <div><span class="block text-[9px] font-bold">RR</span><span id="sBarRR">-</span></div>
+                                <div><span class="block text-[9px] font-bold">GCS</span><span id="sBarGCS">-</span></div>
+                                <div><span class="block text-[9px] font-bold">TEMP</span><span id="sBarTemp">-</span></div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h4 class="text-[11px] font-extrabold text-sjam-green uppercase bg-emerald-50 px-2 py-1 rounded border-l-4 border-sjam-green">[R] Recommendation</h4>
+                            <div class="text-xs p-1"><p><strong>Equipment:</strong> <span id="sBarEquip">-</span></p></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg z-50 flex justify-around items-center">
+            <button onclick="switchTab('dashboard')" id="tab-mobile-dashboard" class="tab-btn-mobile active flex flex-col items-center w-1/4 py-2 text-sjam-green font-bold text-[10px]"><i class="fa-solid fa-chart-pie text-base mb-0.5"></i> Dashboard</button>
+            <button onclick="switchTab('booking')" id="tab-mobile-booking" class="tab-btn-mobile flex flex-col items-center w-1/4 py-2 text-slate-500 font-medium text-[10px]"><i class="fa-solid fa-plus text-base mb-0.5"></i> New</button>
+            <button onclick="switchTab('records')" id="tab-mobile-records" class="tab-btn-mobile flex flex-col items-center w-1/4 py-2 text-slate-500 font-medium text-[10px] relative"><i class="fa-solid fa-list text-base mb-0.5"></i> Queue <span id="mobileBadge" class="absolute top-1 right-2 px-1 text-[9px] bg-sjam-red text-white rounded-full">0</span></button>
+            <button onclick="switchTab('summary')" id="tab-mobile-summary" class="tab-btn-mobile flex flex-col items-center w-1/4 py-2 text-slate-500 font-medium text-[10px]"><i class="fa-solid fa-file-medical text-base mb-0.5"></i> Summary</button>
+        </nav>
+    </div>
+
+    <script>
+        // ==========================================
+        // 🚨 YOUR LIVE GOOGLE APPS SCRIPT URL 🚨
+        // ==========================================
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxD2eXP1yV7Op_opeikNQoRuCnS3DXz34gKNP5Cp39cfkf-j4Q1pfRzcydYar_9O007/exec';
+        // ==========================================
+
+        let bookings = [];
+        let currentActiveRecord = null;
+        let authState = false;
+
+        let chartPriority, chartDispatchHours, chartCategory, chartHospital, chartCrew;
+
+        // --- Authentication ---
+        async function handleLogin(e) {
+            e.preventDefault();
+            const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value.trim();
+            const btn = document.getElementById('loginBtn');
+            const originalBtnText = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Verifying...';
+            btn.disabled = true;
+            document.getElementById('loginErrorMsg').classList.add('hidden');
+
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'login', username: user, password: pass })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    authState = true;
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    document.getElementById('app-wrapper').classList.remove('hidden');
+                    
+                    syncWithCloudDatabase();
+                    showToast(`Welcome! Logged in via Database.`, 'success');
+                } else {
+                    const errMsg = document.getElementById('loginErrorMsg');
+                    errMsg.textContent = result.message || 'Invalid credentials.';
+                    errMsg.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error(error);
+                const errMsg = document.getElementById('loginErrorMsg');
+                errMsg.textContent = 'Connection error. Check network and try again.';
+                errMsg.classList.remove('hidden');
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+            }
+        }
+
+        function logout() {
+            authState = false;
+            document.getElementById('app-wrapper').classList.add('hidden');
+            document.getElementById('login-overlay').classList.remove('hidden');
+            document.getElementById('loginForm').reset();
+            document.getElementById('loginErrorMsg').classList.add('hidden');
+            showToast('Logged out.', 'info');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setInterval(() => {
+                document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' MYT';
+            }, 1000);
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('transferDateTime').value = now.toISOString().slice(0, 16);
+        });
+
+        // --- Cloud Sync ---
+        async function syncWithCloudDatabase() {
+            if(!authState) return;
+
+            document.getElementById('connectionStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1 animate-pulse"></span> Syncing Cloud Data...`;
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'read' })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    bookings = result.data;
+                    bookings.sort((a,b) => new Date(b.dateTime) - new Date(a.dateTime));
+                    
+                    document.getElementById('connectionStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1"></span> Live Cloud Connected`;
+                    updateUI();
+                } else { throw new Error(result.message); }
+            } catch (error) {
+                console.error(error);
+                document.getElementById('connectionStatus').innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-sjam-red mr-1"></span> Offline / Connection Failed`;
+                showToast('Cloud connection failed.', 'error');
+            }
+        }
+
+        function forceSyncWithCloud() { showToast('Fetching latest records...', 'info'); syncWithCloudDatabase(); }
+
+        // --- CRUD Operations ---
+        async function createRecordInCloud(newBooking) {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'create', data: newBooking })
+                });
+                const result = await response.json();
+                if (result.status !== 'success') throw new Error();
+                showToast('Successfully saved to cloud!', 'success');
+            } catch (error) { showToast('Failed to save to cloud. Refresh and try again.', 'error'); }
+        }
+
+        async function updateRecordInCloud(updatedBooking) {
+            try { fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'update', data: updatedBooking }) });
+            } catch (e) { console.error("Update failed."); }
+        }
+
+        async function deleteRecordInCloud(id) {
+            try { fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', id: id }) });
+            } catch (e) { console.error("Delete failed."); }
+        }
+
+        function updateUI() {
+            document.getElementById('mobileBadge').textContent = bookings.length;
+            document.getElementById('desktopBadge').textContent = bookings.length;
+            renderDashboard();
+            renderTableAndCards();
+            if (bookings.length > 0 && !currentActiveRecord) loadSummaryRecord(bookings[0]);
+        }
+
+        // --- Form Submit (Capturing all 38 Columns worth of data) ---
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('submitBtn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            btn.disabled = true;
+
+            const equipmentChecked = Array.from(document.querySelectorAll('input[name="equipment"]:checked')).map(cb => cb.value);
+            const distCategory = document.getElementById('transferDistance').value;
+
+            const newBooking = {
+                id: 'SJAM-WP-' + Math.floor(100000 + Math.random() * 900000),
+                
+                // Details
+                patientName: document.getElementById('patientName').value.trim(),
+                patientID: document.getElementById('patientID').value.trim(),
+                patientAge: parseInt(document.getElementById('patientAge').value) || 0,
+                patientGender: document.getElementById('patientGender').value,
+                patientRace: document.getElementById('patientRace').value,
+                patientNationality: document.getElementById('patientNationality').value,
+                patientAddress: document.getElementById('patientAddress').value.trim(),
+                nokName: document.getElementById('nokName').value.trim(),
+                patientContact: document.getElementById('patientContact').value.trim(),
+                
+                // Case & Routing
+                priority: document.getElementById('transferPriority').value,
+                caseType: document.getElementById('caseType').value,
+                dateTime: document.getElementById('transferDateTime').value,
+                pickupAddress: document.getElementById('pickupAddress').value.trim(),
+                destinationAddress: document.getElementById('destinationAddress').value.trim(),
+                distUnder5: distCategory === '<5',
+                dist5to10: distCategory === '5-10',
+                distOver10: distCategory === '>10',
+
+                // Times
+                timeEnRoute: document.getElementById('timeEnRoute').value,
+                timeArriveScene: document.getElementById('timeArriveScene').value,
+                timeArriveHospital: document.getElementById('timeArriveHospital').value,
+                timeArriveHotspot: document.getElementById('timeArriveHotspot').value,
+
+                // Vitals & Clinical
+                vitalBP: document.getElementById('vitalBP').value || '120/80',
+                vitalPulse: document.getElementById('vitalPulse').value || '75',
+                vitalSpO2: document.getElementById('vitalSpO2').value || '98',
+                vitalResp: document.getElementById('vitalResp').value || '16',
+                vitalGCS: document.getElementById('vitalGCS').value || '15',
+                vitalTemp: document.getElementById('vitalTemp').value || '36.8',
+                primaryDiagnosis: document.getElementById('primaryDiagnosis').value || 'Under Observation',
+                
+                rt: document.getElementById('chkRT').checked,
+                dama: document.getElementById('chkDAMA').checked,
+
+                // Crew & Equip
+                equipment: equipmentChecked.length > 0 ? equipmentChecked.join(', ') : 'Standard Kit',
+                callSign: document.getElementById('ambulanceCallSign').value || 'SJAM WP Alpha 01',
+                crewLead: document.getElementById('crewLead').value,
+                status: 'Pending'
+            };
+
+            bookings.unshift(newBooking);
+            updateUI();
+            
+            createRecordInCloud(newBooking).then(() => {
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up mr-2"></i> Save to Cloud Database';
+                btn.disabled = false;
+                document.getElementById('transferForm').reset();
+                switchTab('records');
+            });
+        }
+
+        // --- Table & Queue Logic ---
+        function renderTableAndCards() {
+            const tbody = document.getElementById('bookingTableBody');
+            const cardsContainer = document.getElementById('mobileCardsContainer');
+            tbody.innerHTML = ''; cardsContainer.innerHTML = '';
+
+            const term = document.getElementById('tableSearch').value.toLowerCase();
+            const filterStat = document.getElementById('statusFilter').value;
+
+            const filtered = bookings.filter(b => {
+                const matchSrch = (b.patientName||'').toLowerCase().includes(term) || (b.id||'').toLowerCase().includes(term);
+                const matchStat = filterStat === 'ALL' || b.status === filterStat;
+                return matchSrch && matchStat;
+            });
+
+            filtered.forEach(r => {
+                let pColor = "bg-slate-100 text-slate-700";
+                if (r.priority === 'Emergency') pColor = "bg-red-100 text-sjam-red font-bold";
+                else if (r.priority === 'Urgent') pColor = "bg-amber-100 text-amber-800 font-bold";
+                
+                let flagIcons = '';
+                if(r.rt) flagIcons += '<i class="fa-solid fa-xmark text-sjam-red mr-1" title="RT"></i>';
+                if(r.dama) flagIcons += '<i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1" title="DAMA"></i>';
+
+                const dateStr = (r.dateTime || '').replace('T', ' ');
+
+                // Desktop Table
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 border-b";
+                tr.innerHTML = `
+                    <td class="p-3 text-[11px] font-semibold text-slate-600 w-24">${dateStr}</td>
+                    <td class="p-3 font-mono font-bold">${r.id}</td>
+                    <td class="p-3"><div class="font-bold flex items-center">${r.patientName} ${flagIcons}</div><div class="text-[10px] text-slate-500">${r.patientID} (${r.patientAge}y/${r.patientGender})</div></td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] ${pColor}">${r.priority}</span></td>
+                    <td class="p-3 font-semibold text-slate-700"><div class="text-[10px] text-sjam-green">${r.caseType||'Medical'}</div>${r.primaryDiagnosis}</td>
+                    <td class="p-3 font-bold text-sjam-green">${r.crewLead}</td>
+                    <td class="p-3 text-[11px] max-w-xs truncate"><div>Fr: ${r.pickupAddress}</div><div>To: ${r.destinationAddress}</div></td>
+                    <td class="p-3">
+                        <select onchange="updateStatus('${r.id}', this.value)" class="text-xs font-semibold px-2 py-1 rounded border bg-white outline-none focus:border-sjam-green">
+                            <option value="Pending" ${r.status==='Pending'?'selected':''}>Pending</option>
+                            <option value="In-Transit" ${r.status==='In-Transit'?'selected':''}>In-Transit</option>
+                            <option value="Completed" ${r.status==='Completed'?'selected':''}>Completed</option>
+                            <option value="Cancelled" ${r.status==='Cancelled'?'selected':''}>Cancelled</option>
+                        </select>
+                    </td>
+                    <td class="p-3 text-center space-x-1">
+                        <button onclick="viewSummary('${r.id}')" class="p-1.5 bg-sjam-green text-white rounded"><i class="fa-solid fa-file-medical"></i></button>
+                        <button onclick="deleteBooking('${r.id}')" class="p-1.5 bg-slate-200 text-slate-700 rounded"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+
+                // Mobile Card
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 rounded-xl p-3 border shadow-sm space-y-2";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div><span class="font-mono text-[10px] font-bold text-slate-500 block">${dateStr}</span><h4 class="font-bold text-sm">${r.patientName} ${flagIcons}</h4><p class="text-[11px] text-slate-500">${r.patientID}</p></div>
+                        <span class="px-2 py-0.5 rounded text-[10px] ${pColor}">${r.priority}</span>
+                    </div>
+                    <div class="text-[11px] text-slate-700 line-clamp-1"><span class="font-bold text-sjam-green">${r.caseType||'Medical'}:</span> ${r.primaryDiagnosis}</div>
+                    <div class="flex items-center justify-between pt-2">
+                        <select onchange="updateStatus('${r.id}', this.value)" class="text-xs font-bold px-2 py-1 rounded bg-white border">
+                            <option value="Pending" ${r.status==='Pending'?'selected':''}>Pending</option><option value="In-Transit" ${r.status==='In-Transit'?'selected':''}>In-Transit</option><option value="Completed" ${r.status==='Completed'?'selected':''}>Completed</option>
+                        </select>
+                        <div class="space-x-1">
+                            <button onclick="viewSummary('${r.id}')" class="p-1.5 bg-sjam-green text-white rounded-lg"><i class="fa-solid fa-eye"></i></button>
+                            <button onclick="deleteBooking('${r.id}')" class="p-1.5 bg-slate-200 text-slate-600 rounded-lg"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+                cardsContainer.appendChild(card);
+            });
+        }
+
+        function filterTable() { renderTableAndCards(); }
+
+        function updateStatus(id, newStatus) {
+            const rec = bookings.find(b => b.id === id);
+            if (rec) {
+                rec.status = newStatus;
+                updateRecordInCloud(rec);
+                updateUI();
+                showToast(`Status updated`, 'info');
+            }
+        }
+
+        function deleteBooking(id) {
+            if (confirm(`Delete record ${id}?`)) {
+                bookings = bookings.filter(b => b.id !== id);
+                deleteRecordInCloud(id);
+                updateUI();
+                showToast('Deleted', 'info');
+            }
+        }
+
+        // --- Tab Switcher ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn-mobile').forEach(btn => { btn.classList.remove('text-sjam-green', 'font-bold'); btn.classList.add('text-slate-500', 'font-medium'); });
+            const mBtn = document.getElementById(`tab-mobile-${tabId}`);
+            if(mBtn) { mBtn.classList.add('text-sjam-green', 'font-bold'); mBtn.classList.remove('text-slate-500'); }
+            
+            document.querySelectorAll('.tab-btn-desktop').forEach(btn => { btn.classList.remove('text-sjam-green', 'border-sjam-green', 'font-semibold'); btn.classList.add('text-slate-600', 'border-transparent'); });
+            const dBtn = document.getElementById(`tab-desktop-${tabId}`);
+            if(dBtn) dBtn.classList.add('text-sjam-green', 'border-sjam-green', 'font-semibold');
+            
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+        }
+
+        // --- Summary / SBAR ---
+        function viewSummary(id) {
+            const rec = bookings.find(b => b.id === id);
+            if(rec) { loadSummaryRecord(rec); switchTab('summary'); }
+        }
+
+        function loadSummaryRecord(r) {
+            currentActiveRecord = r;
+            document.getElementById('summaryRef').textContent = `REF: ${r.id}`;
+            document.getElementById('summaryDate').textContent = `Date: ${(r.dateTime||'').replace('T',' ')}`;
+            document.getElementById('sBarName').textContent = r.patientName;
+            document.getElementById('sBarIC').textContent = r.patientID;
+            document.getElementById('sBarAgeGender').textContent = `${r.patientAge} / ${r.patientGender}`;
+            document.getElementById('sBarPriority').textContent = r.priority;
+            document.getElementById('sBarPickup').textContent = r.pickupAddress;
+            document.getElementById('sBarDest').textContent = r.destinationAddress;
+            document.getElementById('sBarDiag').textContent = `[${r.caseType || 'Medical'}] ${r.primaryDiagnosis}`;
+            
+            let flags = [];
+            if(r.rt) flags.push("Refused Treatment (RT)");
+            if(r.dama) flags.push("Discharge Against Medical Advice (DAMA)");
+            document.getElementById('sBarFlags').textContent = flags.length > 0 ? flags.join(", ") : "None";
+
+            document.getElementById('sBarBP').textContent = r.vitalBP;
+            document.getElementById('sBarPR').textContent = r.vitalPulse;
+            document.getElementById('sBarSpO2').textContent = r.vitalSpO2;
+            document.getElementById('sBarRR').textContent = r.vitalResp;
+            document.getElementById('sBarGCS').textContent = r.vitalGCS;
+            document.getElementById('sBarTemp').textContent = r.vitalTemp;
+            document.getElementById('sBarEquip').textContent = r.equipment;
+        }
+
+        function downloadPDFReport() {
+            if(!currentActiveRecord) return;
+            html2pdf().set({margin:0.2, filename:`${currentActiveRecord.id}_SBAR.pdf`, image:{type:'jpeg',quality:0.98}, html2canvas:{scale:2}, jsPDF:{unit:'in',format:'a4',orientation:'portrait'}}).from(document.getElementById('pdfExportContainer')).save();
+            showToast("Downloading PDF...", "info");
+        }
+
+        function shareWhatsApp() {
+            if(!currentActiveRecord) return;
+            const r = currentActiveRecord;
+            const text = encodeURIComponent(`*SJAM KPW SBAR REPORT*\nREF: ${r.id}\nPatient: ${r.patientName} (${r.patientAge}/${r.patientGender})\nPriority: ${r.priority}\nFr: ${r.pickupAddress}\nTo: ${r.destinationAddress}\nStatus: ${r.status}`);
+            window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        }
+
+        // --- Demo Data ---
+        function loadSampleFormData() {
+            document.getElementById('patientName').value = "Mohd Faiz Bin Ismail";
+            document.getElementById('patientID').value = "880512-14-5391";
+            document.getElementById('patientAge').value = "38";
+            document.getElementById('patientGender').value = "Male";
+            document.getElementById('patientRace').value = "Malay";
+            document.getElementById('patientNationality').value = "Malaysian";
+            document.getElementById('patientContact').value = "+60123998123";
+            document.getElementById('transferPriority').value = "Urgent";
+            document.getElementById('caseType').value = "Medical";
+            document.getElementById('transferDistance').value = "5-10";
+            
+            document.getElementById('pickupAddress').value = "Klinik Kesihatan Setapak";
+            document.getElementById('destinationAddress').value = "HKL Surgical Ward";
+            
+            document.getElementById('primaryDiagnosis').value = "Acute Abdominal Pain";
+            document.getElementById('crewLead').value = "Allan";
+            showToast("Quick fill loaded", "info");
+        }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            let bg = "bg-slate-800 text-white";
+            if (type === 'success') bg = "bg-sjam-green text-white";
+            if (type === 'error') bg = "bg-sjam-red text-white";
+            toast.className = `px-3 py-2 rounded-lg shadow-lg text-xs font-bold flex items-center space-x-2 transition-all duration-300 transform translate-y-2 opacity-0 ${bg}`;
+            toast.innerHTML = `<span>${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => { toast.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        // --- Charts logic ---
+        function applyDashboardFilters() { renderDashboard(); }
+        
+        function renderDashboard() {
+            if(!authState) return;
+            const f = bookings;
+            document.getElementById('dashTotalCount').textContent = f.length;
+            document.getElementById('dashInTransitCount').textContent = f.filter(b=>b.status==='In-Transit').length;
+            document.getElementById('dashCompletedCount').textContent = f.filter(b=>b.status==='Completed').length;
+            document.getElementById('dashCriticalCount').textContent = f.filter(b=>b.priority==='Emergency'||b.priority==='Urgent').length;
+            document.getElementById('dashO2Count').textContent = f.filter(b=>(b.equipment||'').includes('Oxygen')).length;
+
+            if(chartPriority) chartPriority.destroy();
+            const counts = { 'Emergency': 0, 'Urgent': 0, 'Non-Emergency': 0 };
+            f.forEach(b => counts[b.priority] !== undefined ? counts[b.priority]++ : counts['Non-Emergency']++);
+            chartPriority = new Chart(document.getElementById('chartPriorityDoughnut').getContext('2d'), { type:'doughnut', data:{ labels:['Emergency','Urgent','Non'], datasets:[{ data:[counts['Emergency'],counts['Urgent'],counts['Non-Emergency']], backgroundColor:['#D9232A','#F59E0B','#00563F'] }] }, options:{responsive:true, maintainAspectRatio:false, cutout:'65%'} });
+        }
+    </script>
+</body>
+</html>
